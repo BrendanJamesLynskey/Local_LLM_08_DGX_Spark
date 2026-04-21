@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local LLM Hosting 08 — Deploying on NVIDIA DGX Spark</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-card: #0d1117;
+            --bg-code: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #76B900;
+            --accent-dim: #76B90044;
+            --accent-glow: #76B90033;
+            --border: #21262d;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-body: 'Inter', sans-serif;
+            --max-width: 900px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 17px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        /* ── Header ── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .hero > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .series-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 .accent {
+            color: var(--accent);
+        }
+
+        .hero .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+
+        /* ── Tag Pills ── */
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .tag {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+            white-space: nowrap;
+        }
+
+        /* ── Pipeline Flow Bar ── */
+        .pipeline {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            max-width: var(--max-width);
+        }
+
+        .pipeline-step {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .pipeline-arrow {
+            color: var(--accent);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        /* ── Slides ── */
+        .slide {
+            min-height: 100vh;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .slide-number {
+            font-family: var(--font-display);
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--accent-dim);
+            position: absolute;
+            top: 2rem;
+            right: 1.5rem;
+            line-height: 1;
+            user-select: none;
+        }
+
+        .slide h2 {
+            font-family: var(--font-display);
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            line-height: 1.25;
+        }
+
+        .slide h3 {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .slide p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .slide p strong {
+            color: var(--text-primary);
+        }
+
+        .slide ul, .slide ol {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .slide li {
+            margin-bottom: 0.4rem;
+        }
+
+        .slide li strong {
+            color: var(--text-primary);
+        }
+
+        /* ── Code Blocks ── */
+        .code-block {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.25rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #c9d1d9;
+        }
+
+        /* Syntax highlighting (manual) */
+        .kw { color: #ff7b72; }
+        .fn { color: #d2a8ff; }
+        .str { color: #a5d6ff; }
+        .cm { color: #8b949e; font-style: italic; }
+        .num { color: #79c0ff; }
+        .type { color: #ffa657; }
+        .dir { color: #ff7b72; }
+        .mac { color: #ffa657; }
+
+        /* ── Tables ── */
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.25rem 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: var(--bg-code);
+            color: var(--accent);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--font-display);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:nth-child(even) td {
+            background: rgba(13, 17, 23, 0.5);
+        }
+
+        /* ── Diagrams ── */
+        .diagram-flow {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-box {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .diagram-box.accent {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+        }
+
+        .diagram-box.dim {
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+
+        .diagram-arrow {
+            color: var(--accent);
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        /* Vertical flow diagrams */
+        .diagram-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-vertical .diagram-arrow {
+            font-size: 1.1rem;
+        }
+
+        /* Nested hierarchy diagram */
+        .hierarchy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .hierarchy-level {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .hierarchy-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .hierarchy-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+
+        .hierarchy-item {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .hierarchy-item.accent {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+        }
+
+        /* Grid diagram */
+        .diagram-grid {
+            display: grid;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-grid.cols-2 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .diagram-grid.cols-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .diagram-panel {
+            padding: 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .diagram-panel.accent-border {
+            border-left: 3px solid var(--accent);
+        }
+
+        .diagram-panel h4 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .diagram-panel p, .diagram-panel ul {
+            font-size: 0.85rem;
+        }
+
+        /* ── Callout Boxes ── */
+        .callout {
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 1rem 1.25rem;
+            margin: 1.25rem 0;
+        }
+
+        .callout p {
+            margin-bottom: 0;
+        }
+
+        .callout .callout-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.3rem;
+        }
+
+        /* ── Tier Visual ── */
+        .tier-visual {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .tier-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .tier-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 90px;
+            text-align: right;
+        }
+
+        .tier-fill {
+            height: 32px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            white-space: nowrap;
+            transition: width 0.6s ease;
+        }
+
+        .tier-cost {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            min-width: 70px;
+        }
+
+        /* ── Contents list ── */
+        .contents-list {
+            list-style: none;
+            padding-left: 0;
+            counter-reset: contents;
+        }
+
+        .contents-list li {
+            counter-increment: contents;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .contents-list li:last-child {
+            border-bottom: none;
+        }
+
+        .contents-list li::before {
+            content: counter(contents, decimal-leading-zero);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 2rem;
+        }
+
+        .contents-list a {
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .contents-list a:hover {
+            color: var(--accent);
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+
+        .footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .slide {
+                padding: 3rem 1rem;
+                min-height: auto;
+            }
+
+            .slide-number {
+                font-size: 3rem;
+                top: 1.5rem;
+                right: 1rem;
+            }
+
+            .slide h2 {
+                font-size: 1.5rem;
+            }
+
+            .diagram-grid.cols-2,
+            .diagram-grid.cols-3 {
+                grid-template-columns: 1fr;
+            }
+
+            .pipeline {
+                gap: 0.15rem;
+            }
+
+            .pipeline-step {
+                font-size: 0.6rem;
+                padding: 0.2rem 0.4rem;
+            }
+
+            .hero h1 {
+                font-size: 1.8rem;
+            }
+
+            table {
+                font-size: 0.78rem;
+            }
+
+            .tier-label {
+                min-width: 60px;
+                font-size: 0.65rem;
+            }
+
+            .tier-fill {
+                font-size: 0.6rem;
+                height: 26px;
+            }
+        }
+
+        /* ── Interactive controls (added for Local LLM series) ── */
+        .control-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1.25rem 0;
+        }
+        .control-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .control-row label {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            min-width: 180px;
+        }
+        .control-row input[type="range"] {
+            flex: 1;
+            min-width: 160px;
+            accent-color: var(--accent);
+        }
+        .control-row input[type="number"],
+        .control-row select {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 4px;
+            padding: 0.3rem 0.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+        }
+        .control-row .val {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 80px;
+            text-align: right;
+        }
+        .btn {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 0.4rem 0.9rem;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .btn:hover { background: rgba(118, 185, 0, 0.2); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn.secondary {
+            background: var(--bg-code);
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+        .result-box {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: 4px;
+            padding: 0.75rem 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            margin-top: 0.75rem;
+        }
+        .result-box .line-label { color: var(--text-secondary); }
+        .result-box .line-val   { color: var(--accent); font-weight: 600; }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        .metric {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.6rem 0.8rem;
+            text-align: center;
+        }
+        .metric .metric-label {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .metric .metric-value {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            color: var(--accent);
+            font-weight: 600;
+            margin-top: 0.2rem;
+        }
+
+        /* Canvas / SVG containers */
+        .canvas-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
+        .canvas-wrap canvas,
+        .canvas-wrap svg {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+
+        /* Small inline badge */
+        .badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
+        .badge.ok    { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .badge.warn  { border-color: #ffa657; color: #ffa657; background: rgba(255,166,87,0.08); }
+        .badge.bad   { border-color: #ff7b72; color: #ff7b72; background: rgba(255,123,114,0.08); }
+
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <div class="series-label">Local LLM Hosting Series — Presentation 08</div>
+    <h1>Deploying on <span class="accent">NVIDIA DGX Spark</span></h1>
+    <p class="subtitle">A practical guide to putting vLLM on a GB10 Grace-Blackwell workstation &mdash; unified memory, 128 GB fit, arm64 quirks, and two-Spark clustering.</p>
+
+    <div class="tags">
+        <span class="tag">DGX Spark</span><span class="tag">GB10</span>
+        <span class="tag">arm64</span><span class="tag">Unified memory</span>
+        <span class="tag">200 GbE</span><span class="tag">vLLM</span>
+    </div>
+
+    <div class="pipeline">
+        <span class="pipeline-step">Hardware</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Setup</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">arm64</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">vLLM</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Fit</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Pair</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">What Spark Actually Is</a></li>
+        <li><a href="#slide-02">Unified Memory &mdash; Why Inference Likes It</a></li>
+        <li><a href="#slide-03">First Setup &mdash; CUDA, Docker, arm64 Gotchas</a></li>
+        <li><a href="#slide-04">vLLM on Spark &mdash; Realistic Configs</a></li>
+        <li><a href="#slide-05">What Fits &mdash; Model/Concurrency Matrix</a></li>
+        <li><a href="#slide-06">Honest Benchmarks vs RTX 4090, H100</a></li>
+        <li><a href="#slide-07">Two-Spark Pair Over 200 GbE</a></li>
+        <li><a href="#slide-08">When Not To Use a Spark</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>What Spark Actually Is</h2>
+    <p>The DGX Spark is a small-form-factor workstation with one <strong>GB10 Grace-Blackwell Superchip</strong>. Ubuntu pre-installed, full NVIDIA software stack, ~$4,700. Physically it looks like a Mac Studio; functionally it is a tiny GB200 DGX.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Spec</th><th>DGX Spark</th><th>Context</th></tr></thead>
+            <tbody>
+                <tr><td>Chip</td><td>GB10 Grace-Blackwell</td><td>20-core Arm Neoverse + Blackwell GPU on one package</td></tr>
+                <tr><td>Memory</td><td>128 GB LPDDR5x, unified CPU/GPU</td><td>~5&times; an RTX 4090's VRAM</td></tr>
+                <tr><td>Mem BW</td><td>~273 GB/s</td><td>below HBM3 (3 TB/s) but plenty for inference</td></tr>
+                <tr><td>Tensor perf</td><td>1 PFLOP FP4 sparse</td><td>Blackwell tensor cores</td></tr>
+                <tr><td>Interconnect</td><td>NVLink-C2C between Grace &amp; Blackwell</td><td>900 GB/s, coherent</td></tr>
+                <tr><td>Networking</td><td>ConnectX-8 SuperNIC, 2&times; QSFP56</td><td>200 GbE / NDR IB each</td></tr>
+                <tr><td>OS</td><td>Ubuntu 24.04 (Grace) + DGX OS stack</td><td>CUDA 12.6+, Triton, TensorRT preinstalled</td></tr>
+                <tr><td>Power</td><td>&le; 240 W</td><td>desktop power budget</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>Unified Memory &mdash; Why Inference Likes It</h2>
+    <p>On a discrete GPU, weights must be copied CPU&rarr;GPU once per load, and any spillover sits in slow system RAM across PCIe. On Spark the GPU <em>directly addresses</em> all 128 GB.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Practical effect #1 &mdash; model loading</h4>
+            <p>A 70B FP8 model streams in about 40 s from NVMe into VRAM on an H100 via PCIe. On Spark, the weights are simply mmap'd into the unified pool. Cold start can drop to 10&ndash;15 s for the same model.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Practical effect #2 &mdash; KV cache sizing</h4>
+            <p>Because weights and cache share the same pool, <code>--gpu-memory-utilization</code> effectively selects how much of 128 GB to give vLLM. A 32B FP8 model takes 32 GB; the other ~90 GB is KV pool. That's hundreds of concurrent 8k-token sessions.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Practical effect #3 &mdash; host-side tools</h4>
+            <p>You can keep tokeniser, router, vector DB, retrieval service, and the LLM all on the same chip without paying PCIe latency to cross between them. Useful for agent loops where small pieces of code thread between model calls.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Practical effect #4 &mdash; Grace CPU is <em>good</em></h4>
+            <p>20 Neoverse V2 cores with sane memory bandwidth run prefix hashing, tokenisation, JSON schema validation, and structured-output grammars quickly enough that they're not the bottleneck they are on a budget x86.</p>
+        </div>
+    </div>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>First Setup &mdash; CUDA, Docker, arm64 Gotchas</h2>
+    <div class="code-block">
+        <div class="code-header">Verify the stack as shipped</div>
+        <pre><code>uname -m                      <span class="cm"># aarch64 &mdash; arm64</span>
+nvidia-smi                    <span class="cm"># shows one GB10 device</span>
+nvcc --version                <span class="cm"># CUDA 12.6 or later</span>
+docker --version              <span class="cm"># pre-installed</span>
+nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker</code></pre>
+    </div>
+
+    <h3>arm64 container selection</h3>
+    <p>Most common containers are multi-arch now but a few aren't. Always pull with <code>--platform linux/arm64</code> to be explicit:</p>
+    <div class="code-block">
+        <div class="code-header">vLLM on arm64 &mdash; matching image</div>
+        <pre><code>docker pull --platform=linux/arm64 vllm/vllm-openai:v0.7.0
+<span class="cm"># If you see &quot;exec format error&quot; → you pulled an amd64 image. Re-pull with --platform.</span></code></pre>
+    </div>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>What works natively</h4>
+            <ul>
+                <li>vLLM v0.6+ (arm64 wheel published)</li>
+                <li>PyTorch 2.5+ arm64 with CUDA</li>
+                <li>Triton, TensorRT, NCCL, Flash-Attention</li>
+                <li>Hugging Face Hub, datasets, transformers</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Things that bite</h4>
+            <ul>
+                <li>Some <code>bitsandbytes</code> releases lack arm64 wheels</li>
+                <li>Old CUDA-enabled Docker images (&lt; 12.4) &mdash; pin new ones</li>
+                <li>Third-party binary Python wheels (build from source)</li>
+                <li>Closed-source x86 Linux utilities (sysbench, perf variants)</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>vLLM on Spark &mdash; Realistic Configs</h2>
+    <div class="code-block">
+        <div class="code-header">70B FP8 on a single Spark (easy default)</div>
+        <pre><code>docker run --rm -d --name vllm-70b \
+    --gpus all --ipc=host \
+    --ulimit memlock=-1 --ulimit stack=67108864 \
+    -p 8000:8000 \
+    -v ~/hf-cache:/root/.cache/huggingface \
+    -e HF_TOKEN=<span class="str">$HF_TOKEN</span> \
+    vllm/vllm-openai:v0.7.0 \
+    --model neuralmagic/Meta-Llama-3.1-70B-Instruct-FP8 \
+    --dtype fp8 \
+    --kv-cache-dtype fp8 \
+    --max-model-len 8192 \
+    --gpu-memory-utilization 0.90 \
+    --enable-prefix-caching \
+    --max-num-seqs 128</code></pre>
+    </div>
+
+    <div class="code-block">
+        <div class="code-header">Mistral-Small-24B BF16, long context</div>
+        <pre><code>--model mistralai/Mistral-Small-24B-Instruct \
+--dtype bfloat16 \
+--max-model-len 32768 \
+--gpu-memory-utilization 0.85 \
+--enable-prefix-caching \
+--enable-chunked-prefill \
+--max-num-seqs 64</code></pre>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Util setting on Spark</div>
+        <p>Because the 128 GB is shared with the OS and any side-car services, don't push <code>--gpu-memory-utilization</code> above 0.90 on a Spark. Leave ~12 GB for Grace-side processes, or you'll OOM your own router.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>What Fits &mdash; Model / Concurrency Matrix</h2>
+    <p>Rough guide. Assumes <code>--gpu-memory-utilization 0.88</code>, so ~112 GB usable, and FP8 KV.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Model</th><th>Precision</th><th>Weights</th><th>KV/tok</th><th>Usable ctx @ 32 seqs</th></tr></thead>
+            <tbody>
+                <tr><td>Llama-3.1-8B</td><td>BF16</td><td>16 GB</td><td>0.5 MB</td><td>~128k per session</td></tr>
+                <tr><td>Qwen2.5-14B</td><td>BF16</td><td>28 GB</td><td>0.6 MB</td><td>~64k</td></tr>
+                <tr><td>Mistral-Small-24B</td><td>BF16</td><td>48 GB</td><td>0.8 MB</td><td>~32k</td></tr>
+                <tr><td>Llama-3.3-70B</td><td>FP8</td><td>70 GB</td><td>0.6 MB (FP8 KV)</td><td>~16k</td></tr>
+                <tr><td>Llama-3.3-70B</td><td>AWQ INT4</td><td>40 GB</td><td>1.2 MB (FP16 KV)</td><td>~24k</td></tr>
+                <tr><td>DeepSeek-R1-Distill-32B</td><td>BF16</td><td>64 GB</td><td>0.7 MB</td><td>~24k</td></tr>
+                <tr><td>Mixtral-8x7B (MoE)</td><td>BF16</td><td>92 GB</td><td>0.4 MB active</td><td>~16k</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Where Spark stops</div>
+        <p>A single Spark <strong>can't</strong> serve Llama-3-405B (141 GB FP8 weights) or DeepSeek-V3 (&gt; 200 GB) without either aggressive quantisation (INT4 / MX-FP4) or pairing with a second Spark (slide 07).</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>Honest Benchmarks vs RTX 4090, H100</h2>
+    <p>Representative Llama-3.1-8B FP16 / FP8, prompt 256, output 128, with vLLM 0.7 and CUDA graphs.</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 260" width="720" height="260" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .axis{ stroke: #21262d; }
+                .bA { fill: rgba(165,214,255,0.4); stroke: #a5d6ff; }
+                .bB { fill: rgba(118,185,0,0.45); stroke: #76B900; }
+                .bC { fill: rgba(255,166,87,0.4); stroke: #ffa657; }
+                .lbl{ fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+                .val{ fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; }
+                .h { fill: #e6edf3; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px; }
+            </style>
+            <text x="10" y="18" class="h">Single-user tok/s &mdash; higher is better</text>
+            <line x1="140" y1="30" x2="140" y2="130" class="axis"/>
+            <line x1="140" y1="130" x2="700" y2="130" class="axis"/>
+            <text x="130" y="50" class="lbl" text-anchor="end">RTX 4090</text>       <rect x="140" y="40" width="330" height="18" class="bA"/><text x="475" y="54" class="val">~110 tok/s (BF16)</text>
+            <text x="130" y="80" class="lbl" text-anchor="end">DGX Spark (FP8)</text><rect x="140" y="70" width="270" height="18" class="bB"/><text x="415" y="84" class="val">~85 tok/s</text>
+            <text x="130" y="110" class="lbl" text-anchor="end">H100 80 GB</text>    <rect x="140" y="100" width="440" height="18" class="bC"/><text x="585" y="114" class="val">~160 tok/s</text>
+
+            <text x="10" y="160" class="h">Aggregate tok/s @ 32 concurrent requests &mdash; throughput</text>
+            <line x1="140" y1="170" x2="140" y2="240" class="axis"/>
+            <line x1="140" y1="240" x2="700" y2="240" class="axis"/>
+            <text x="130" y="190" class="lbl" text-anchor="end">RTX 4090</text>        <rect x="140" y="180" width="190" height="18" class="bA"/><text x="335" y="194" class="val">~1400</text>
+            <text x="130" y="220" class="lbl" text-anchor="end">DGX Spark</text>       <rect x="140" y="210" width="260" height="18" class="bB"/><text x="405" y="224" class="val">~1900</text>
+            <text x="130" y="250" class="lbl" text-anchor="end">H100 80 GB</text>      <rect x="140" y="240" width="500" height="18" class="bC"/><text x="645" y="254" class="val">~3700</text>
+        </svg>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Reading this honestly</div>
+        <p>Spark is not an H100. Single-user it's closer to a 4090, sometimes slightly behind (LPDDR5x bandwidth is the ceiling). Aggregate throughput is <em>higher</em> than a 4090 because the giant unified pool lets you run more concurrent sessions without swapping. It's a very good "local inference server" shape and a poor "single-user benchmarking rig" shape.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>Two-Spark Pair Over 200 GbE</h2>
+    <p>Each Spark has two QSFP56 ports. A direct QSFP56 DAC cable between the two delivers ~25 GB/s (200 Gb/s) between GPUs with RoCEv2. Two options for using it:</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Option A &mdash; PP across boxes</h4>
+            <p>Layers 0..39 on Spark-0, 40..79 on Spark-1. Point-to-point send/recv only. Handles weights up to ~240 GB (Llama-3-405B FP8, DeepSeek-V3 INT4).</p>
+            <div class="code-block" style="margin-top:0.5rem;"><div class="code-header">vllm (head)</div><pre><code>ray start --head --port=6379
+vllm serve meta-llama/Meta-Llama-3.1-405B-Instruct-FP8 \
+    --pipeline-parallel-size 2 \
+    --tensor-parallel-size 1 \
+    --distributed-executor-backend ray</code></pre></div>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Option B &mdash; DP of full replicas</h4>
+            <p>Each Spark runs an independent vLLM; a router shares traffic. Clean, linear scaling to ~2&times; throughput. Use if each model fits in 128 GB by itself.</p>
+            <div class="code-block" style="margin-top:0.5rem;"><div class="code-header">per host</div><pre><code>docker run ... vllm/vllm-openai:v0.7.0 ...
+<span class="cm"># LiteLLM / Envoy LB out front</span></code></pre></div>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Why not TP across the pair?</div>
+        <p>TP across 200 GbE works but costs you. The all-reduce traffic per layer is high relative to compute. PP and DP are both friendlier to this fabric. Reserve cross-node TP for proper IB NDR links.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>When Not To Use a Spark</h2>
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Spark is a good fit when…</h4>
+            <ul>
+                <li>You want 70B-class inference locally, quietly, at &le; 240 W</li>
+                <li>You serve a few dozen concurrent users inside a lab or office</li>
+                <li>You need 128 GB to experiment with MoE / long-context configs</li>
+                <li>You want a zero-admin Ubuntu + full NVIDIA stack box</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Spark is a bad fit when…</h4>
+            <ul>
+                <li>You want absolute peak tok/s on small models &rarr; RTX 4090 or H100</li>
+                <li>You run mixed x86-only pipelines you won't port to arm64</li>
+                <li>You need dense matrix throughput (training) &rarr; H100/H200</li>
+                <li>You can burst on cloud &rarr; per-hour H100 may be cheaper</li>
+                <li>You want a gaming GPU too &mdash; Spark has no display output</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Position</div>
+        <p>Spark occupies the niche of "workstation-class local inference". Nothing else quite does: laptops don't have enough memory, consumer GPUs don't have 128 GB, H100 boxes are rack-scale. If your project maps onto that niche, Spark is genuinely good. If it doesn't, a 4090 or a cloud H100 will both serve you better.</p>
+    </div>
+</section>
+<!-- ════════════════════════════════════ Footer ════════════════════════════════════ -->
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLMs#local-llm-hosting">Local LLM Hosting Series</a></p>
+    <p style="margin-top: 0.5rem; font-size: 0.8rem;"><a href="https://github.com/BrendanJamesLynskey/LLMs#local-llm-hosting">Back to Series Index</a></p>
+</footer>
+
+<script>
+    // Smooth scroll for TOC links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    // Subtle fade-in on scroll
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(slide => {
+        slide.style.opacity = '0';
+        slide.style.transform = 'translateY(30px)';
+        slide.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(slide);
+    });
+</script>
+
+</body>
+</html>
