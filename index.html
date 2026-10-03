@@ -807,13 +807,13 @@
         <table>
             <thead><tr><th>Spec</th><th>DGX Spark</th><th>Context</th></tr></thead>
             <tbody>
-                <tr><td>Chip</td><td>GB10 Grace-Blackwell</td><td>20-core Arm Neoverse + Blackwell GPU on one package</td></tr>
+                <tr><td>Chip</td><td>GB10 Grace-Blackwell</td><td>20-core Arm (10&times; Cortex-X925 + 10&times; Cortex-A725) + Blackwell GPU on one package</td></tr>
                 <tr><td>Memory</td><td>128 GB LPDDR5x, unified CPU/GPU</td><td>~5&times; an RTX 4090's VRAM</td></tr>
                 <tr><td>Mem BW</td><td>~273 GB/s</td><td>below HBM3 (3 TB/s) but plenty for inference</td></tr>
                 <tr><td>Tensor perf</td><td>1 PFLOP FP4 sparse</td><td>Blackwell tensor cores</td></tr>
                 <tr><td>Interconnect</td><td>NVLink-C2C between Grace &amp; Blackwell</td><td>900 GB/s, coherent</td></tr>
-                <tr><td>Networking</td><td>ConnectX-8 SuperNIC, 2&times; QSFP56</td><td>200 GbE / NDR IB each</td></tr>
-                <tr><td>OS</td><td>Ubuntu 24.04 (Grace) + DGX OS stack</td><td>CUDA 12.6+, Triton, TensorRT preinstalled</td></tr>
+                <tr><td>Networking</td><td>ConnectX-7 SmartNIC, 2&times; QSFP56</td><td>200 GbE / NDR IB each</td></tr>
+                <tr><td>OS</td><td>Ubuntu 24.04 (Grace) + DGX OS stack</td><td>CUDA 13.0, Triton, TensorRT preinstalled</td></tr>
                 <tr><td>Power</td><td>&le; 240 W</td><td>desktop power budget</td></tr>
             </tbody>
         </table>
@@ -840,7 +840,7 @@
         </div>
         <div class="diagram-panel accent-border">
             <h4>Practical effect #4 &mdash; Grace CPU is <em>good</em></h4>
-            <p>20 Neoverse V2 cores with sane memory bandwidth run prefix hashing, tokenisation, JSON schema validation, and structured-output grammars quickly enough that they're not the bottleneck they are on a budget x86.</p>
+            <p>20 Arm cores (10 Cortex-X925 + 10 Cortex-A725) with sane memory bandwidth run prefix hashing, tokenisation, JSON schema validation, and structured-output grammars quickly enough that they're not the bottleneck they are on a budget x86.</p>
         </div>
     </div>
 </section>
@@ -852,7 +852,7 @@
         <div class="code-header">Verify the stack as shipped</div>
         <pre><code>uname -m                      <span class="cm"># aarch64 &mdash; arm64</span>
 nvidia-smi                    <span class="cm"># shows one GB10 device</span>
-nvcc --version                <span class="cm"># CUDA 12.6 or later</span>
+nvcc --version                <span class="cm"># CUDA 13.0 or later</span>
 docker --version              <span class="cm"># pre-installed</span>
 nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker</code></pre>
@@ -935,20 +935,20 @@ sudo systemctl restart docker</code></pre>
         <table>
             <thead><tr><th>Model</th><th>Precision</th><th>Weights</th><th>KV/tok</th><th>Usable ctx @ 32 seqs</th></tr></thead>
             <tbody>
-                <tr><td>Llama-3.1-8B</td><td>BF16</td><td>16 GB</td><td>0.5 MB</td><td>~128k per session</td></tr>
-                <tr><td>Qwen2.5-14B</td><td>BF16</td><td>28 GB</td><td>0.6 MB</td><td>~64k</td></tr>
-                <tr><td>Mistral-Small-24B</td><td>BF16</td><td>48 GB</td><td>0.8 MB</td><td>~32k</td></tr>
-                <tr><td>Llama-3.3-70B</td><td>FP8</td><td>70 GB</td><td>0.6 MB (FP8 KV)</td><td>~16k</td></tr>
-                <tr><td>Llama-3.3-70B</td><td>AWQ INT4</td><td>40 GB</td><td>1.2 MB (FP16 KV)</td><td>~24k</td></tr>
-                <tr><td>DeepSeek-R1-Distill-32B</td><td>BF16</td><td>64 GB</td><td>0.7 MB</td><td>~24k</td></tr>
-                <tr><td>Mixtral-8x7B (MoE)</td><td>BF16</td><td>92 GB</td><td>0.4 MB active</td><td>~16k</td></tr>
+                <tr><td>Llama-3.1-8B</td><td>BF16</td><td>16 GB</td><td>0.07 MB</td><td>~46k per session</td></tr>
+                <tr><td>Qwen2.5-14B</td><td>BF16</td><td>28 GB</td><td>0.10 MB</td><td>~27k</td></tr>
+                <tr><td>Mistral-Small-24B</td><td>BF16</td><td>48 GB</td><td>0.08 MB</td><td>~24k</td></tr>
+                <tr><td>Llama-3.3-70B</td><td>FP8</td><td>70 GB</td><td>0.16 MB (FP8 KV)</td><td>~8k</td></tr>
+                <tr><td>Llama-3.3-70B</td><td>AWQ INT4</td><td>40 GB</td><td>0.33 MB (FP16 KV)</td><td>~7k</td></tr>
+                <tr><td>DeepSeek-R1-Distill-32B</td><td>BF16</td><td>64 GB</td><td>0.13 MB</td><td>~11k</td></tr>
+                <tr><td>Mixtral-8x7B (MoE)</td><td>BF16</td><td>92 GB</td><td>0.07 MB</td><td>~9k</td></tr>
             </tbody>
         </table>
     </div>
 
     <div class="callout">
         <div class="callout-label">Where Spark stops</div>
-        <p>A single Spark <strong>can't</strong> serve Llama-3-405B (141 GB FP8 weights) or DeepSeek-V3 (&gt; 200 GB) without either aggressive quantisation (INT4 / MX-FP4) or pairing with a second Spark (slide 07).</p>
+        <p>A single Spark <strong>can't</strong> serve Llama-3-405B (405 GB FP8 weights, ~203 GB even at INT4) or DeepSeek-V3 (671 GB FP8, ~335 GB at INT4) at any precision. 405B at INT4 needs a second Spark (slide 07); DeepSeek-V3 doesn't fit even a pair.</p>
     </div>
 </section>
 
@@ -971,22 +971,22 @@ sudo systemctl restart docker</code></pre>
             <text x="10" y="18" class="h">Single-user tok/s &mdash; higher is better</text>
             <line x1="140" y1="30" x2="140" y2="130" class="axis"/>
             <line x1="140" y1="130" x2="700" y2="130" class="axis"/>
-            <text x="130" y="50" class="lbl" text-anchor="end">RTX 4090</text>       <rect x="140" y="40" width="330" height="18" class="bA"/><text x="475" y="54" class="val">~110 tok/s (BF16)</text>
-            <text x="130" y="80" class="lbl" text-anchor="end">DGX Spark (FP8)</text><rect x="140" y="70" width="270" height="18" class="bB"/><text x="415" y="84" class="val">~85 tok/s</text>
+            <text x="130" y="50" class="lbl" text-anchor="end">RTX 4090</text>       <rect x="140" y="40" width="165" height="18" class="bA"/><text x="310" y="54" class="val">&le; ~60 tok/s (BF16 ceiling)</text>
+            <text x="130" y="80" class="lbl" text-anchor="end">DGX Spark (FP8)</text><rect x="140" y="70" width="56" height="18" class="bB"/><text x="201" y="84" class="val">~20 tok/s</text>
             <text x="130" y="110" class="lbl" text-anchor="end">H100 80 GB</text>    <rect x="140" y="100" width="440" height="18" class="bC"/><text x="585" y="114" class="val">~160 tok/s</text>
 
             <text x="10" y="160" class="h">Aggregate tok/s @ 32 concurrent requests &mdash; throughput</text>
             <line x1="140" y1="170" x2="140" y2="240" class="axis"/>
             <line x1="140" y1="240" x2="700" y2="240" class="axis"/>
             <text x="130" y="190" class="lbl" text-anchor="end">RTX 4090</text>        <rect x="140" y="180" width="190" height="18" class="bA"/><text x="335" y="194" class="val">~1400</text>
-            <text x="130" y="220" class="lbl" text-anchor="end">DGX Spark</text>       <rect x="140" y="210" width="260" height="18" class="bB"/><text x="405" y="224" class="val">~1900</text>
+            <text x="130" y="220" class="lbl" text-anchor="end">DGX Spark</text>       <rect x="140" y="210" width="50" height="18" class="bB"/><text x="195" y="224" class="val">~370</text>
             <text x="130" y="250" class="lbl" text-anchor="end">H100 80 GB</text>      <rect x="140" y="240" width="500" height="18" class="bC"/><text x="645" y="254" class="val">~3700</text>
         </svg>
     </div>
 
     <div class="callout">
         <div class="callout-label">Reading this honestly</div>
-        <p>Spark is not an H100. Single-user it's closer to a 4090, sometimes slightly behind (LPDDR5x bandwidth is the ceiling). Aggregate throughput is <em>higher</em> than a 4090 because the giant unified pool lets you run more concurrent sessions without swapping. It's a very good "local inference server" shape and a poor "single-user benchmarking rig" shape.</p>
+        <p>Spark is not an H100. Single-user it's well behind a 4090 (LPDDR5x bandwidth is the ceiling: 273 GB/s vs 1008 GB/s). LMSYS measured Llama-3.1-8B FP8 on Spark at 20.5 tok/s at batch 1 and 368 tok/s at batch 32 (SGLang). The 4090 bar is the bandwidth ceiling (1008 GB/s &divide; 16 GB), not a measurement. What the giant unified pool buys is models and concurrency that don't fit a 24 GB card at all. It's a very good "local inference server" shape and a poor "single-user benchmarking rig" shape.</p>
     </div>
 </section>
 
@@ -998,9 +998,9 @@ sudo systemctl restart docker</code></pre>
     <div class="diagram-grid cols-2">
         <div class="diagram-panel accent-border">
             <h4>Option A &mdash; PP across boxes</h4>
-            <p>Layers 0..39 on Spark-0, 40..79 on Spark-1. Point-to-point send/recv only. Handles weights up to ~240 GB (Llama-3-405B FP8, DeepSeek-V3 INT4).</p>
+            <p>Layers 0..39 on Spark-0, 40..79 on Spark-1. Point-to-point send/recv only. Handles weights up to ~240 GB (e.g. Llama-3-405B at INT4, ~203 GB; 405B FP8 at 405 GB and DeepSeek-V3 INT4 at ~335 GB are too big).</p>
             <div class="code-block" style="margin-top:0.5rem;"><div class="code-header">vllm (head)</div><pre><code>ray start --head --port=6379
-vllm serve meta-llama/Meta-Llama-3.1-405B-Instruct-FP8 \
+vllm serve hugging-quants/Meta-Llama-3.1-405B-Instruct-AWQ-INT4 \
     --pipeline-parallel-size 2 \
     --tensor-parallel-size 1 \
     --distributed-executor-backend ray</code></pre></div>
@@ -1039,7 +1039,7 @@ vllm serve meta-llama/Meta-Llama-3.1-405B-Instruct-FP8 \
                 <li>You run mixed x86-only pipelines you won't port to arm64</li>
                 <li>You need dense matrix throughput (training) &rarr; H100/H200</li>
                 <li>You can burst on cloud &rarr; per-hour H100 may be cheaper</li>
-                <li>You want a gaming GPU too &mdash; Spark has no display output</li>
+                <li>You want a gaming GPU too &mdash; Spark runs Arm Linux (DGX OS), not a gaming platform</li>
             </ul>
         </div>
     </div>
