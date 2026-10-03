@@ -901,7 +901,7 @@ sudo systemctl restart docker</code></pre>
     -e HF_TOKEN=<span class="str">$HF_TOKEN</span> \
     vllm/vllm-openai:v0.7.0 \
     --model neuralmagic/Meta-Llama-3.1-70B-Instruct-FP8 \
-    --dtype fp8 \
+    --dtype auto \
     --kv-cache-dtype fp8 \
     --max-model-len 8192 \
     --gpu-memory-utilization 0.90 \
